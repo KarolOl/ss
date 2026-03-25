@@ -1,0 +1,28 @@
+### Weryfikacja podpisu (auto-detect: PAdES, CAdES, XAdES enveloped itp.)
+POST http://localhost:8080/api/verify
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="doc-signed-pades-baseline-b.pdf"
+Content-Type: application/pdf
+
+< ./files/Raport%20.pdf
+--boundary--
+
+### Weryfikacja podpisu XAdES detached
+POST http://localhost:8080/api/verify/xades-detached
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="signature"; filename="signature.xml"
+Content-Type: application/xml
+
+< ./files/signature.xml
+--boundary
+Content-Disposition: form-data; name="originalFile"; filename="doc1.xml"
+Content-Type: application/xml
+
+< ./files/doc1.xml
+--boundary--
+
+
