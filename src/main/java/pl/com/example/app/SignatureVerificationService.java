@@ -32,7 +32,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.*;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -47,6 +48,10 @@ import java.util.Set;
 @Service
 public class SignatureVerificationService {
 
+    private static final float PDF_MARGIN = 5f;
+    private static final float PDF_FONT_SIZE = 10f;
+    private static final float PDF_LEADING = 12f;
+
     private CommonTrustedCertificateSource trustedCertificateSource;
     private CertificateVerifier certificateVerifier;
 
@@ -60,10 +65,8 @@ public class SignatureVerificationService {
         certificateVerifier.setOcspSource(new OnlineOCSPSource());
         certificateVerifier.setCrlSource(new OnlineCRLSource());
 
-        // Konfiguracja TSL dla Polski (z EU LOTL)
         TrustedListsCertificateSource tslSource = new TrustedListsCertificateSource();
 
-        // Załaduj certyfikaty operatorów TSL do weryfikacji podpisu pod listą TSL
         CommonCertificateSource tslSigningCertSource = new CommonCertificateSource();
         FileUtils.listFiles(new ClassPathResource("certs").getFile(), new String[]{"cer", "crt"}, true)
                 .stream()
@@ -79,7 +82,7 @@ public class SignatureVerificationService {
 
         FileCacheDataLoader dataLoader = new FileCacheDataLoader();
         dataLoader.setDataLoader(onlineLoader);
-        dataLoader.setCacheExpirationTime(24 * 60 * 60 * 1000L); // 24h cache
+        dataLoader.setCacheExpirationTime(24 * 60 * 60 * 1000L);
 
         tlValidationJob.setOnlineDataLoader(dataLoader);
         tlValidationJob.setSynchronizationStrategy(new ExpirationAndSignatureCheckStrategy());
@@ -90,7 +93,7 @@ public class SignatureVerificationService {
 
         tlValidationJob.setTrustedListSources(plTslSource);
         tlValidationJob.onlineRefresh();
-        System.out.println("TSL OK: " + tslSource.getNumberOfTrustedEntityKeys() + " certów");
+        System.out.println("TSL OK: " + tslSource.getNumberOfTrustedEntityKeys() + " cert\u00F3w");
 
         certificateVerifier.setTrustedCertSources(trustedCertificateSource, tslSource);
     }
@@ -114,15 +117,14 @@ public class SignatureVerificationService {
         }
         if (Objects.isNull(detachedSignature) || detachedSignature.isEmpty()) {
             return verifySignature(signedFile);
-        } else {
-            return verifyDetachedSignature(detachedSignature, signedFile);
         }
+        return verifyDetachedSignature(signedFile, detachedSignature);
     }
 
     private Reports verifySignature(MultipartFile signedFile) {
-        try (final var is = signedFile.getInputStream()) {
-            final var doc = new InMemoryDocument(is, signedFile.getOriginalFilename());
-            final var validator = SignedDocumentValidator.fromDocument(doc);
+        try (var is = signedFile.getInputStream()) {
+            var doc = new InMemoryDocument(is, signedFile.getOriginalFilename());
+            var validator = SignedDocumentValidator.fromDocument(doc);
             validator.setCertificateVerifier(certificateVerifier);
             return validator.validateDocument();
         } catch (IOException e) {
@@ -131,78 +133,7 @@ public class SignatureVerificationService {
     }
 
     public byte[] xmlToPdf(String xml) {
-        try (PDDocument document = new PDDocument()) {
-            PDPage page = new PDPage(PDRectangle.A4);
-            document.addPage(page);
-            PDPageContentStream contentStream = new PDPageContentStream(document, page);
-            contentStream.setFont(PDType1Font.HELVETICA, 10);
-            float margin = 5;
-            float width = page.getMediaBox().getWidth() - 2 * margin;
-            float y = page.getMediaBox().getHeight() - margin;
-            float leading = 12f;
-            String[] lines = xml.split("\n");
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, y);
-            for (String line : lines) {
-                // Usuń znaki tabulacji i inne niedozwolone znaki kontrolne
-                String safeLine = line.replace("\t", " ")
-                        .replace("\u000B", " ")
-                        .replace("\u000C", " ")
-                        .replace("\u0085", " ")
-                        .replace("\u2028", " ")
-                        .replace("\u2029", " ")
-                        .replace("Ą", "A")
-                        .replace("Ć", "C")
-                        .replace("Ę", "E")
-                        .replace("Ł", "L")
-                        .replace("Ń", "N")
-                        .replace("Ó", "O")
-                        .replace("Ś", "S")
-                        .replace("Ź", "Z")
-                        .replace("Ż", "Z")
-                        .replace("ą", "a")
-                        .replace("ć", "c")
-                        .replace("ę", "e")
-                        .replace("ł", "l")
-                        .replace("ń", "n")
-                        .replace("ó", "o")
-                        .replace("ś", "s")
-                        .replace("ź", "z")
-                        .replace("ż", "z");
-
-                // Podziel linię na fragmenty mieszczące się w szerokości strony
-                while (!safeLine.isEmpty()) {
-                    int breakIndex = safeLine.length();
-                    String subLine = safeLine;
-                    while (PDType1Font.HELVETICA.getStringWidth(subLine) / 1000 * 10 > width && breakIndex > 0) {
-                        breakIndex--;
-                        subLine = safeLine.substring(0, breakIndex);
-                    }
-                    contentStream.showText(subLine.replace("\r", "").replace("\n", ""));
-                    contentStream.newLineAtOffset(0, -leading);
-                    y -= leading;
-                    safeLine = safeLine.substring(subLine.length());
-                    if (y < margin + leading) {
-                        contentStream.endText();
-                        contentStream.close();
-                        page = new PDPage(PDRectangle.A4);
-                        document.addPage(page);
-                        contentStream = new PDPageContentStream(document, page);
-                        contentStream.setFont(PDType1Font.HELVETICA, 10);
-                        y = page.getMediaBox().getHeight() - margin;
-                        contentStream.beginText();
-                        contentStream.newLineAtOffset(margin, y);
-                    }
-                }
-            }
-            contentStream.endText();
-            contentStream.close();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            document.save(out);
-            return out.toByteArray();
-        } catch (Exception e) {
-            throw new RuntimeException("Błąd konwersji XML do PDF", e);
-        }
+        return generatePdfFromLines(List.of(xml.split("\n")));
     }
 
     public byte[] generatePdfTableReport(Reports reports) {
@@ -214,20 +145,15 @@ public class SignatureVerificationService {
             float margin = 20;
             float y = page.getMediaBox().getHeight() - margin;
             float tableTop = y - 30;
-            float leading = 16f;
             float cellHeight = 20f;
             float[] colWidths = {80, 80, 100, 100, 100};
-            float tableWidth = 0;
-            for (float w : colWidths) tableWidth += w;
-            float x = margin;
+            float x;
 
-            // Nagłówek
             contentStream.beginText();
             contentStream.newLineAtOffset(margin, y);
-            contentStream.showText("Raport weryfikacji podpisów elektronicznych");
+            contentStream.showText("Raport weryfikacji podpis\u00F3w elektronicznych");
             contentStream.endText();
 
-            // Tabela - nagłówki
             y = tableTop;
             contentStream.setFont(PDType1Font.HELVETICA_BOLD, 10);
             String[] headers = {"ID", "Indication", "SubIndication", "Format", "Qualification"};
@@ -241,24 +167,21 @@ public class SignatureVerificationService {
             }
             y -= cellHeight;
 
-            // Tabela - dane
             contentStream.setFont(PDType1Font.HELVETICA, 10);
             var simpleReport = reports.getSimpleReport();
             for (String id : simpleReport.getSignatureIdList()) {
                 x = margin;
                 String[] row = {
-                    id,
-                    String.valueOf(simpleReport.getIndication(id)),
-                    String.valueOf(simpleReport.getSubIndication(id)),
-                    String.valueOf(simpleReport.getSignatureFormat(id)),
-                    String.valueOf(simpleReport.getSignatureQualification(id))
+                        id,
+                        String.valueOf(simpleReport.getIndication(id)),
+                        String.valueOf(simpleReport.getSubIndication(id)),
+                        String.valueOf(simpleReport.getSignatureFormat(id)),
+                        String.valueOf(simpleReport.getSignatureQualification(id))
                 };
                 for (int i = 0; i < row.length; i++) {
                     contentStream.beginText();
                     contentStream.newLineAtOffset(x, y);
-                    String cell = row[i] != null ? row[i].replaceAll("[\r\n\t]", " ") : "";
-                    // Przytnij jeśli za długie
-                    if (cell.length() > 40) cell = cell.substring(0, 37) + "...";
+                    String cell = sanitizeTableCell(row[i], 40);
                     contentStream.showText(cell);
                     contentStream.endText();
                     x += colWidths[i];
@@ -278,7 +201,7 @@ public class SignatureVerificationService {
             document.save(out);
             return out.toByteArray();
         } catch (Exception e) {
-            throw new RuntimeException("Błąd generowania PDF z tabelą", e);
+            throw new RuntimeException("B\u0142\u0105d generowania PDF z tabel\u0105", e);
         }
     }
 
@@ -291,26 +214,26 @@ public class SignatureVerificationService {
             float margin = 20;
             float y = page.getMediaBox().getHeight() - margin;
             float leading = 18f;
-            // Nagłówek
+
             contentStream.beginText();
             contentStream.newLineAtOffset(margin, y);
-            contentStream.showText("Raport weryfikacji podpisów elektronicznych");
+            contentStream.showText("Raport weryfikacji podpis\u00F3w elektronicznych");
             contentStream.endText();
+
             y -= 2 * leading;
             contentStream.setFont(PDType1Font.HELVETICA, 11);
             var simpleReport = reports.getSimpleReport();
             for (String id : simpleReport.getSignatureIdList()) {
                 String[][] pairs = {
-                    {"ID", id},
-                    {"Indication", String.valueOf(simpleReport.getIndication(id))},
-                    {"SubIndication", String.valueOf(simpleReport.getSubIndication(id))},
-                    {"Format", String.valueOf(simpleReport.getSignatureFormat(id))},
-                    {"Qualification", String.valueOf(simpleReport.getSignatureQualification(id))}
+                        {"ID", id},
+                        {"Indication", String.valueOf(simpleReport.getIndication(id))},
+                        {"SubIndication", String.valueOf(simpleReport.getSubIndication(id))},
+                        {"Format", String.valueOf(simpleReport.getSignatureFormat(id))},
+                        {"Qualification", String.valueOf(simpleReport.getSignatureQualification(id))}
                 };
                 for (String[] pair : pairs) {
                     String key = pair[0] + ": ";
-                    String value = pair[1] != null ? pair[1].replaceAll("[\r\n\t]", " ") : "";
-                    if (value.length() > 80) value = value.substring(0, 77) + "...";
+                    String value = sanitizeTableCell(pair[1], 80);
                     contentStream.beginText();
                     contentStream.newLineAtOffset(margin, y);
                     contentStream.showText(key + value);
@@ -325,7 +248,6 @@ public class SignatureVerificationService {
                         y = page.getMediaBox().getHeight() - margin;
                     }
                 }
-                // Oddziel podpisy pustą linią
                 y -= leading / 2;
             }
             contentStream.close();
@@ -333,24 +255,23 @@ public class SignatureVerificationService {
             document.save(out);
             return out.toByteArray();
         } catch (Exception e) {
-            throw new RuntimeException("Błąd generowania PDF (klucz-wartość)", e);
+            throw new RuntimeException("B\u0142\u0105d generowania PDF (klucz-warto\u015B\u0107)", e);
         }
     }
 
-    /**
-     * Buduje raport klucz-wartość (drzewo) dla dowolnego obiektu, do 3 poziomów zagnieżdżenia.
-     */
     private void buildKeyValueTree(Object obj, String keyPrefix, int level, int maxLevel, List<String> lines, Set<Object> visited) {
         if (obj == null || level > maxLevel || visited.contains(obj)) {
             return;
         }
         visited.add(obj);
+
         Class<?> clazz = obj.getClass();
         if (clazz.isPrimitive() || obj instanceof String || obj instanceof Number || obj instanceof Boolean || obj instanceof Enum) {
             lines.add(keyPrefix + obj);
             return;
         }
-        if (obj instanceof Collection) {
+
+        if (obj instanceof Collection<?>) {
             int idx = 0;
             for (Object item : (Collection<?>) obj) {
                 buildKeyValueTree(item, keyPrefix + "[" + idx + "]: ", level + 1, maxLevel, lines, visited);
@@ -358,45 +279,34 @@ public class SignatureVerificationService {
             }
             return;
         }
-        if (obj instanceof Map) {
+
+        if (obj instanceof Map<?, ?>) {
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) obj).entrySet()) {
                 buildKeyValueTree(entry.getValue(), keyPrefix + entry.getKey() + ": ", level + 1, maxLevel, lines, visited);
             }
             return;
         }
-        // Dla obiektów: wypisz gettery
+
         Method[] methods = clazz.getMethods();
         for (Method m : methods) {
-            if (m.getParameterCount() == 0 && Modifier.isPublic(m.getModifiers()) && (m.getName().startsWith("get") || m.getName().startsWith("is")) && !m.getName().equals("getClass")) {
-                String fieldName = m.getName().replaceFirst("^(get|is)", "");
-                if (!fieldName.isEmpty()) {
-                    fieldName = Character.toLowerCase(fieldName.charAt(0)) + fieldName.substring(1);
-                }
+            if (isSimpleGetter(m)) {
+                String fieldName = toFieldName(m.getName());
                 try {
                     Object value = m.invoke(obj);
                     String indent = "  ".repeat(level);
-                    if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean || value instanceof Enum) {
+                    if (isSimpleValue(value)) {
                         lines.add(indent + fieldName + ": " + value);
-                    } else if (value instanceof Collection) {
-                        lines.add(indent + fieldName + ":");
-                        buildKeyValueTree(value, indent + "  ", level + 1, maxLevel, lines, visited);
-                    } else if (value instanceof Map) {
-                        lines.add(indent + fieldName + ":");
-                        buildKeyValueTree(value, indent + "  ", level + 1, maxLevel, lines, visited);
                     } else {
                         lines.add(indent + fieldName + ":");
                         buildKeyValueTree(value, indent + "  ", level + 1, maxLevel, lines, visited);
                     }
-                } catch (Exception e) {
-                    // pomiń błędy getterów
+                } catch (Exception ignored) {
+                    // intentionally ignored: some getters may throw during reflection traversal
                 }
             }
         }
     }
 
-    /**
-     * Generuje PDF z raportem klucz-wartość (drzewo) dla SimpleReport (do 3 poziomów).
-     */
     public byte[] generatePdfKeyValueTreeReport(Reports reports) {
         List<String> lines = new ArrayList<>();
         Object simpleReport = reports.getSimpleReport();
@@ -404,88 +314,129 @@ public class SignatureVerificationService {
         return generatePdfFromLines(lines);
     }
 
-    /**
-     * Generuje PDF z listy linii tekstowych (zachowuje polskie znaki, łamanie linii, marginesy, font TTF jeśli dostępny).
-     */
     private byte[] generatePdfFromLines(List<String> lines) {
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage(PDRectangle.A4);
             document.addPage(page);
             PDPageContentStream contentStream = new PDPageContentStream(document, page);
-            contentStream.setFont(PDType1Font.HELVETICA, 10);
-            float margin = 5;
-            float width = page.getMediaBox().getWidth() - 2 * margin;
-            float y = page.getMediaBox().getHeight() - margin;
-            float leading = 12f;
-            contentStream.beginText();
-            contentStream.newLineAtOffset(margin, y);
-            for (String line : lines) {
-                // Usuń znaki tabulacji i inne niedozwolone znaki kontrolne
-                String safeLine = line.replace("\t", " ")
-                        .replace("\u000B", " ")
-                        .replace("\u000C", " ")
-                        .replace("\u0085", " ")
-                        .replace("\u2028", " ")
-                        .replace("\u2029", " ")
-                        .replace("Ą", "A")
-                        .replace("Ć", "C")
-                        .replace("Ę", "E")
-                        .replace("Ł", "L")
-                        .replace("Ń", "N")
-                        .replace("Ó", "O")
-                        .replace("Ś", "S")
-                        .replace("Ź", "Z")
-                        .replace("Ż", "Z")
-                        .replace("ą", "a")
-                        .replace("ć", "c")
-                        .replace("ę", "e")
-                        .replace("ł", "l")
-                        .replace("ń", "n")
-                        .replace("ó", "o")
-                        .replace("ś", "s")
-                        .replace("ź", "z")
-                        .replace("ż", "z");
+            contentStream.setFont(PDType1Font.HELVETICA, PDF_FONT_SIZE);
 
-                // Podziel linię na fragmenty mieszczące się w szerokości strony
+            float width = page.getMediaBox().getWidth() - 2 * PDF_MARGIN;
+            float y = page.getMediaBox().getHeight() - PDF_MARGIN;
+            contentStream.beginText();
+            contentStream.newLineAtOffset(PDF_MARGIN, y);
+
+            for (String line : lines) {
+                String safeLine = sanitizePdfText(line);
                 while (!safeLine.isEmpty()) {
-                    int breakIndex = safeLine.length();
-                    String subLine = safeLine;
-                    while (PDType1Font.HELVETICA.getStringWidth(subLine) / 1000 * 10 > width && breakIndex > 0) {
-                        breakIndex--;
-                        subLine = safeLine.substring(0, breakIndex);
-                    }
-                    contentStream.showText(subLine.replace("\r", "").replace("\n", ""));
-                    contentStream.newLineAtOffset(0, -leading);
-                    y -= leading;
+                    String subLine = fitLineToWidth(safeLine, width);
+                    contentStream.showText(removeLineBreaks(subLine));
+                    contentStream.newLineAtOffset(0, -PDF_LEADING);
+                    y -= PDF_LEADING;
                     safeLine = safeLine.substring(subLine.length());
-                    if (y < margin + leading) {
+
+                    if (y < PDF_MARGIN + PDF_LEADING) {
                         contentStream.endText();
                         contentStream.close();
                         page = new PDPage(PDRectangle.A4);
                         document.addPage(page);
                         contentStream = new PDPageContentStream(document, page);
-                        contentStream.setFont(PDType1Font.HELVETICA, 10);
-                        y = page.getMediaBox().getHeight() - margin;
+                        contentStream.setFont(PDType1Font.HELVETICA, PDF_FONT_SIZE);
+                        y = page.getMediaBox().getHeight() - PDF_MARGIN;
                         contentStream.beginText();
-                        contentStream.newLineAtOffset(margin, y);
+                        contentStream.newLineAtOffset(PDF_MARGIN, y);
                     }
                 }
             }
+
             contentStream.endText();
             contentStream.close();
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             document.save(out);
             return out.toByteArray();
         } catch (Exception e) {
-            throw new RuntimeException("Błąd konwersji XML do PDF", e);
+            throw new RuntimeException("B\u0142\u0105d konwersji XML do PDF", e);
         }
     }
 
+    private String sanitizePdfText(String line) {
+        return line.replace("\t", " ")
+                .replace("\u000B", " ")
+                .replace("\u000C", " ")
+                .replace("\u0085", " ")
+                .replace("\u2028", " ")
+                .replace("\u2029", " ")
+                .replace("\u0104", "A")
+                .replace("\u0106", "C")
+                .replace("\u0118", "E")
+                .replace("\u0141", "L")
+                .replace("\u0143", "N")
+                .replace("\u00D3", "O")
+                .replace("\u015A", "S")
+                .replace("\u0179", "Z")
+                .replace("\u017B", "Z")
+                .replace("\u0105", "a")
+                .replace("\u0107", "c")
+                .replace("\u0119", "e")
+                .replace("\u0142", "l")
+                .replace("\u0144", "n")
+                .replace("\u00F3", "o")
+                .replace("\u015B", "s")
+                .replace("\u017A", "z")
+                .replace("\u017C", "z");
+    }
+
+    private String fitLineToWidth(String line, float width) throws IOException {
+        int breakIndex = line.length();
+        String subLine = line;
+        while (PDType1Font.HELVETICA.getStringWidth(subLine) / 1000 * PDF_FONT_SIZE > width && breakIndex > 0) {
+            breakIndex--;
+            subLine = line.substring(0, breakIndex);
+        }
+        return subLine;
+    }
+
+    private String removeLineBreaks(String text) {
+        return text.replace("\r", "").replace("\n", "");
+    }
+
+    private String sanitizeTableCell(String value, int maxLength) {
+        String cell = value != null ? value.replaceAll("[\r\n\t]", " ") : "";
+        if (cell.length() > maxLength) {
+            return cell.substring(0, maxLength - 3) + "...";
+        }
+        return cell;
+    }
+
+    private boolean isSimpleGetter(Method method) {
+        return method.getParameterCount() == 0
+                && Modifier.isPublic(method.getModifiers())
+                && (method.getName().startsWith("get") || method.getName().startsWith("is"))
+                && !"getClass".equals(method.getName());
+    }
+
+    private boolean isSimpleValue(Object value) {
+        return value == null
+                || value instanceof String
+                || value instanceof Number
+                || value instanceof Boolean
+                || value instanceof Enum;
+    }
+
+    private String toFieldName(String methodName) {
+        String fieldName = methodName.replaceFirst("^(get|is)", "");
+        if (fieldName.isEmpty()) {
+            return fieldName;
+        }
+        return Character.toLowerCase(fieldName.charAt(0)) + fieldName.substring(1);
+    }
+
     private Reports verifyDetachedSignature(MultipartFile signedFile, MultipartFile detachedSignature) {
-        try (final var signedFileInputStream = signedFile.getInputStream(); final var detachedSignatureInputStream = detachedSignature.getInputStream()) {
-            final var signedFileDocument = new InMemoryDocument(signedFileInputStream, signedFile.getOriginalFilename());
-            final var detachedSignatureDocument = new InMemoryDocument(detachedSignatureInputStream, detachedSignature.getOriginalFilename());
-            final var validator = SignedDocumentValidator.fromDocument(detachedSignatureDocument);
+        try (var signedFileInputStream = signedFile.getInputStream();
+             var detachedSignatureInputStream = detachedSignature.getInputStream()) {
+            var signedFileDocument = new InMemoryDocument(signedFileInputStream, signedFile.getOriginalFilename());
+            var detachedSignatureDocument = new InMemoryDocument(detachedSignatureInputStream, detachedSignature.getOriginalFilename());
+            var validator = SignedDocumentValidator.fromDocument(detachedSignatureDocument);
             validator.setDetachedContents(List.of(signedFileDocument));
             validator.setCertificateVerifier(certificateVerifier);
             return validator.validateDocument();
@@ -499,3 +450,5 @@ public class SignatureVerificationService {
         return generatePdfKeyValueReport(reports);
     }
 }
+
+
