@@ -2,7 +2,6 @@ package pl.com.example.app;
 
 import javax.naming.InvalidNameException;
 import javax.naming.ldap.LdapName;
-import javax.naming.ldap.Rdn;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -25,21 +24,18 @@ public final class LdapPathFormatter {
         LDAP_LABELS.put("EMAILADDRESS", "Adres e-mail");
     }
 
-    private LdapPathFormatter() {
-    }
-
     public static String toHumanReadableLdapPath(String ldapPath) {
         if (ldapPath == null || ldapPath.isBlank()) {
             return "";
         }
 
         try {
-            LdapName ldapName = new LdapName(ldapPath);
-            StringBuilder result = new StringBuilder();
+            final var ldapName = new LdapName(ldapPath);
+            final var result = new StringBuilder();
 
-            for (Rdn rdn : ldapName.getRdns()) {
-                String key = rdn.getType().toUpperCase();
-                String label = LDAP_LABELS.getOrDefault(key, key);
+            for (final var rdn : ldapName.getRdns()) {
+                final var key = rdn.getType().toUpperCase();
+                final var label = LDAP_LABELS.getOrDefault(key, key);
 
                 if (!result.isEmpty()) {
                     result.append(System.lineSeparator());
@@ -52,7 +48,7 @@ public final class LdapPathFormatter {
 
             return result.toString();
         } catch (InvalidNameException e) {
-            throw new IllegalArgumentException("Nieprawidłowa ścieżka LDAP: " + ldapPath, e);
+            throw new IllegalArgumentException("Invalid LDAP path: " + ldapPath, e);
         }
     }
 }
