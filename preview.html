@@ -10,6 +10,36 @@
       background: #f6f7f9;
     }
 
+    .layout {
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: 260px;
+      background: #ffffff;
+      border-right: 1px solid #dfe3ea;
+    }
+
+    .sidebar .nav-link {
+      color: #344054;
+      font-weight: 500;
+    }
+
+    .sidebar .nav-link:hover {
+      background: #f1f5f9;
+      color: #1d4ed8;
+    }
+
+    .sidebar .nav-link.active {
+      background: #e7f0ff;
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+
+    .content {
+      min-width: 0;
+    }
+
     .task-card {
       border-color: #dfe3ea;
       border-radius: 8px;
@@ -37,6 +67,16 @@
     }
 
     @media (max-width: 768px) {
+      .layout {
+        display: block !important;
+      }
+
+      .sidebar {
+        width: 100%;
+        border-right: 0;
+        border-bottom: 1px solid #dfe3ea;
+      }
+
       .task-row {
         grid-template-columns: 1fr;
       }
@@ -44,80 +84,100 @@
   </style>
 </head>
 <body>
-  <main class="container py-4 py-md-5">
-    <header class="mb-3">
-      <h1 class="h4 mb-1">Zadania administracyjne</h1>
-      <p class="text-secondary mb-0">Ręczne uruchamianie procesów pomocniczych i przeliczeń systemowych.</p>
-    </header>
-
-    <section class="card task-card shadow-sm">
-      <div class="list-group list-group-flush">
-        <div class="list-group-item p-3 p-md-4">
-          <div class="task-row">
-            <div>
-              <h2 class="h6 mb-1">Przeliczanie odsetek</h2>
-              <p class="task-description mb-0">DEMO1.</p>
-            </div>
-            <div class="task-meta">Ostatnio: 2026-07-10, 18:30</div>
-            <div>
-              <span class="badge rounded-pill text-bg-success">Gotowe</span>
-            </div>
-            <div class="text-md-end">
-              <button type="button" class="btn btn-primary btn-sm btn-fixed">Start</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="list-group-item p-3 p-md-4">
-          <div class="task-row">
-            <div>
-              <h2 class="h6 mb-1">DEMO3</h2>
-              <p class="task-description mb-0">DEMO2.</p>
-            </div>
-            <div class="task-meta">Ostatnio: 2026-07-09, 07:15</div>
-            <div>
-              <span class="badge rounded-pill text-bg-success">Gotowe</span>
-            </div>
-            <div class="text-md-end">
-              <button type="button" class="btn btn-primary btn-sm btn-fixed">Start</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="list-group-item p-3 p-md-4">
-          <div class="task-row">
-            <div>
-              <h2 class="h6 mb-1">DEMO4</h2>
-              <p class="task-description mb-0">DEMO5.</p>
-            </div>
-            <div class="task-meta">Ostatnio: dzisiaj, 06:00</div>
-            <div>
-              <span class="badge rounded-pill text-bg-warning">Do sprawdzenia</span>
-            </div>
-            <div class="text-md-end">
-              <button type="button" class="btn btn-outline-secondary btn-sm btn-fixed">Uruchom</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="list-group-item p-3 p-md-4">
-          <div class="task-row">
-            <div>
-              <h2 class="h6 mb-1">Synchronizacja danych</h2>
-              <p class="task-description mb-0">Odświeżenie danych z systemów zewnętrznych.</p>
-            </div>
-            <div class="task-meta">Ostatnio: 2026-07-11, 05:45</div>
-            <div>
-              <span class="badge rounded-pill text-bg-success">Gotowe</span>
-            </div>
-            <div class="text-md-end">
-              <button type="button" class="btn btn-primary btn-sm btn-fixed">Start</button>
-            </div>
-          </div>
-        </div>
+  <div class="layout d-flex">
+    <aside class="sidebar p-3 p-md-4">
+      <div class="mb-4">
+        <div class="fw-bold fs-5">Admin</div>
+        <div class="text-secondary small">Panel operacyjny</div>
       </div>
-    </section>
-  </main>
+
+      <nav class="nav nav-pills flex-column gap-1" aria-label="Nawigacja administracyjna">
+        <a class="nav-link active" href="#">Zadania</a>
+        <a class="nav-link" href="#">Użytkownicy</a>
+        <a class="nav-link" href="#">Raporty</a>
+        <a class="nav-link" href="#">Import danych</a>
+        <a class="nav-link" href="#">Konfiguracja</a>
+        <a class="nav-link" href="#">Logi systemowe</a>
+      </nav>
+    </aside>
+
+    <main class="content flex-grow-1">
+      <div class="container-fluid py-4 py-md-5 px-3 px-md-4">
+        <header class="mb-3">
+          <h1 class="h4 mb-1">Zadania administracyjne</h1>
+          <p class="text-secondary mb-0">Ręczne uruchamianie procesów pomocniczych i przeliczeń systemowych.</p>
+        </header>
+
+        <section class="card task-card shadow-sm">
+          <div class="list-group list-group-flush">
+            <div class="list-group-item p-3 p-md-4">
+              <div class="task-row">
+                <div>
+                  <h2 class="h6 mb-1">Przeliczanie odsetek</h2>
+                  <p class="task-description mb-0">DEMO1.</p>
+                </div>
+                <div class="task-meta">Ostatnio: 2026-07-10, 18:30</div>
+                <div>
+                  <span class="badge rounded-pill text-bg-success">Gotowe</span>
+                </div>
+                <div class="text-md-end">
+                  <button type="button" class="btn btn-primary btn-sm btn-fixed">Start</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="list-group-item p-3 p-md-4">
+              <div class="task-row">
+                <div>
+                  <h2 class="h6 mb-1">DEMO3</h2>
+                  <p class="task-description mb-0">DEMO2.</p>
+                </div>
+                <div class="task-meta">Ostatnio: 2026-07-09, 07:15</div>
+                <div>
+                  <span class="badge rounded-pill text-bg-success">Gotowe</span>
+                </div>
+                <div class="text-md-end">
+                  <button type="button" class="btn btn-primary btn-sm btn-fixed">Start</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="list-group-item p-3 p-md-4">
+              <div class="task-row">
+                <div>
+                  <h2 class="h6 mb-1">DEMO4</h2>
+                  <p class="task-description mb-0">DEMO5.</p>
+                </div>
+                <div class="task-meta">Ostatnio: dzisiaj, 06:00</div>
+                <div>
+                  <span class="badge rounded-pill text-bg-warning">Do sprawdzenia</span>
+                </div>
+                <div class="text-md-end">
+                  <button type="button" class="btn btn-outline-secondary btn-sm btn-fixed">Uruchom</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="list-group-item p-3 p-md-4">
+              <div class="task-row">
+                <div>
+                  <h2 class="h6 mb-1">Synchronizacja danych</h2>
+                  <p class="task-description mb-0">Odświeżenie danych z systemów zewnętrznych.</p>
+                </div>
+                <div class="task-meta">Ostatnio: 2026-07-11, 05:45</div>
+                <div>
+                  <span class="badge rounded-pill text-bg-success">Gotowe</span>
+                </div>
+                <div class="text-md-end">
+                  <button type="button" class="btn btn-primary btn-sm btn-fixed">Start</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
